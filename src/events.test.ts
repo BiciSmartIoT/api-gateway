@@ -9,11 +9,18 @@ test("normalizeEvent accepts a valid ESP32 event", () => {
     eventType: "LOCKED",
     blocked: true,
     message: "BICICLETA BLOQUEADA",
+    latitude: -12.0464,
+    longitude: -77.0428,
+    speedKmph: 12.5,
+    insideGeofence: true,
+    lockState: "LOCKED",
   });
 
   assert.equal(event.deviceId, "esp32-demo-01");
   assert.equal(event.eventType, "LOCKED");
   assert.equal(event.blocked, true);
+  assert.equal(event.latitude, -12.0464);
+  assert.equal(event.speedKmph, 12.5);
   assert.ok(event.occurredAt);
 });
 

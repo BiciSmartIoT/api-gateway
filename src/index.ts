@@ -8,7 +8,7 @@ import { IotEventPayload, StoredGatewayEvent, normalizeEvent } from "./events";
 
 const app = express();
 
-const port = Number(process.env.PORT || 8080);
+const port = Number(process.env.PORT || 8081);
 const backendBaseUrl = (process.env.BACKEND_BASE_URL || "http://localhost:8080").replace(/\/+$/, "");
 const iotDeviceKey = process.env.IOT_DEVICE_KEY || "dev-device-key";
 const gatewayInternalKey = process.env.GATEWAY_INTERNAL_KEY || "dev-gateway-key";
@@ -53,10 +53,47 @@ app.get("/api/iot/latest", (_req: Request, res: Response) => {
   res.json(latestEvent);
 });
 
+app.get("/api/iot/devices/:deviceId/config", async (req: Request, res: Response) => {
+  if (!ensureDeviceKey(req, res)) {
+    return;
+  }
+
+  const response = await forwardBackendJson(`/api/iot/devices/${encodeURIComponent(req.params.deviceId)}/config`);
+  res.status(response.statusCode).json(response.body);
+});
+
+app.get("/api/iot/devices/:deviceId/commands/next", async (req: Request, res: Response) => {
+  if (!ensureDeviceKey(req, res)) {
+    return;
+  }
+
+  const response = await forwardBackendJson(
+    `/api/iot/devices/${encodeURIComponent(req.params.deviceId)}/commands/next`
+  );
+  if (response.statusCode === 204) {
+    res.status(204).send();
+    return;
+  }
+  res.status(response.statusCode).json(response.body);
+});
+
+app.post("/api/iot/devices/:deviceId/commands/:commandId/ack", async (req: Request, res: Response) => {
+  if (!ensureDeviceKey(req, res)) {
+    return;
+  }
+
+  const response = await forwardBackendJson(
+    `/api/iot/devices/${encodeURIComponent(req.params.deviceId)}/commands/${encodeURIComponent(
+      req.params.commandId
+    )}/ack`,
+    "POST",
+    req.body
+  );
+  res.status(response.statusCode).json(response.body);
+});
+
 app.post("/api/iot/events", async (req: Request, res: Response) => {
-  const providedKey = req.header("X-Device-Key");
-  if (!providedKey || providedKey !== iotDeviceKey) {
-    res.status(401).json({ message: "Device key invalida" });
+  if (!ensureDeviceKey(req, res)) {
     return;
   }
 
@@ -81,6 +118,50 @@ app.post("/api/iot/events", async (req: Request, res: Response) => {
 
   res.status(forwarded ? 202 : 502).json(latestEvent);
 });
+
+function ensureDeviceKey(req: Request, res: Response): boolean {
+  const providedKey = req.header("X-Device-Key");
+  if (!providedKey || providedKey !== iotDeviceKey) {
+    res.status(401).json({ message: "Device key invalida" });
+    return false;
+  }
+  return true;
+}
+
+async function forwardBackendJson(path: string, method = "GET", body?: unknown) {
+  try {
+    const response = await fetch(`${backendBaseUrl}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Gateway-Key": gatewayInternalKey,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+    if (response.status === 204) {
+      return { statusCode: 204, body: null };
+    }
+
+    const text = await response.text();
+    const parsed = safeJson(text);
+    return { statusCode: response.status, body: parsed };
+  } catch (error) {
+    console.error("Backend unavailable while proxying IoT request", error);
+    return { statusCode: 502, body: { message: "Backend IoT no disponible" } };
+  }
+}
+
+function safeJson(text: string) {
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
 
 async function forwardToBackend(event: IotEventPayload): Promise<boolean> {
   try {
