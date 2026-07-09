@@ -11,10 +11,10 @@ const char* GATEWAY_BASE_URL = "https://api-gateway-production-c440.up.railway.a
 const char* IOT_DEVICE_KEY = "dev-device-key";
 const char* DEVICE_ID = "esp32-demo-01";
 
-const unsigned long HEARTBEAT_INTERVAL_MS = 30000;
-const unsigned long GPS_EVENT_INTERVAL_MS = 7000;
-const unsigned long CONFIG_POLL_INTERVAL_MS = 15000;
-const unsigned long COMMAND_POLL_INTERVAL_MS = 5000;
+const unsigned long HEARTBEAT_INTERVAL_MS = 5000;
+const unsigned long GPS_EVENT_INTERVAL_MS = 3000;
+const unsigned long CONFIG_POLL_INTERVAL_MS = 10000;
+const unsigned long COMMAND_POLL_INTERVAL_MS = 2000;
 
 // ==================== PINES ====================
 #define LED_VERDE 2
@@ -103,6 +103,7 @@ String httpRequest(const String& method, const String& url, const String& payloa
 
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Key", IOT_DEVICE_KEY);
+  http.setTimeout(2500);
 
   if (method == "GET")
   {
