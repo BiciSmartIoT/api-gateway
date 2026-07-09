@@ -38,8 +38,8 @@ unsigned long lastGpsEventAt = 0;
 unsigned long lastConfigPollAt = 0;
 unsigned long lastCommandPollAt = 0;
 
-const int SERVO_LOCK_ANGLE = 20;
-const int SERVO_UNLOCK_ANGLE = 100;
+const int SERVO_LOCK_ANGLE = 170;
+const int SERVO_UNLOCK_ANGLE = 0;
 
 // ==================================================
 void conectarWifi()
@@ -214,11 +214,82 @@ void moverServo(int angle)
   bloqueoServo.detach();
 }
 
+void barridoServo(int fromAngle, int toAngle)
+{
+  if (!bloqueoServo.attached())
+  {
+    bloqueoServo.attach(SERVO_PIN, 500, 2500);
+  }
+
+  int step = fromAngle <= toAngle ? 2 : -2;
+  for (int pos = fromAngle; step > 0 ? pos <= toAngle : pos >= toAngle; pos += step)
+  {
+    bloqueoServo.write(pos);
+    delay(15);
+  }
+
+  delay(300);
+  bloqueoServo.detach();
+}
+
+void alertaVelocidadSerial()
+{
+  Serial.println();
+  Serial.println("***** ALERTA DE VELOCIDAD *****");
+
+  digitalWrite(LED_VERDE, HIGH);
+  digitalWrite(LED_ROJO, HIGH);
+  Serial.println("Moviendo servo...");
+  barridoServo(SERVO_UNLOCK_ANGLE, SERVO_LOCK_ANGLE);
+  barridoServo(SERVO_LOCK_ANGLE, SERVO_UNLOCK_ANGLE);
+
+  for (int i = 0; i < 12; i++)
+  {
+    digitalWrite(LED_VERDE, HIGH);
+    digitalWrite(LED_ROJO, HIGH);
+    delay(50);
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_ROJO, LOW);
+    delay(50);
+  }
+
+  if (!bloqueado)
+  {
+    setEstadoVisual(false);
+  }
+
+  Serial.println("Fin alerta velocidad");
+  Serial.println();
+}
+
+void advertenciaLimiteSerial()
+{
+  Serial.println();
+  Serial.println("***** ADVERTENCIA: CERCA DEL LIMITE *****");
+
+  digitalWrite(LED_ROJO, HIGH);
+  for (int i = 0; i < 8; i++)
+  {
+    digitalWrite(LED_ROJO, HIGH);
+    delay(100);
+    digitalWrite(LED_ROJO, LOW);
+    delay(100);
+  }
+
+  if (!bloqueado)
+  {
+    setEstadoVisual(false);
+  }
+
+  Serial.println("Advertencia finalizada");
+  Serial.println();
+}
+
 void activarBloqueo(const char* reason)
 {
   if (!bloqueado)
   {
-    moverServo(SERVO_LOCK_ANGLE);
+    barridoServo(SERVO_UNLOCK_ANGLE, SERVO_LOCK_ANGLE);
     bloqueado = true;
   }
 
@@ -229,7 +300,7 @@ void activarBloqueo(const char* reason)
 
 void desbloquear(const char* reason)
 {
-  moverServo(SERVO_UNLOCK_ANGLE);
+  barridoServo(SERVO_LOCK_ANGLE, SERVO_UNLOCK_ANGLE);
   bloqueado = false;
   setEstadoVisual(false);
   Serial.print("DESBLOQUEADO: ");
@@ -454,6 +525,18 @@ void comandosSerialLocales()
   char c = Serial.read();
   switch (c)
   {
+    case 'A':
+    case 'a':
+      alertaVelocidadSerial();
+      enviarEventoIoT("SPEED_ALERT", "ALERTA DE VELOCIDAD POR SERIAL");
+      break;
+
+    case 'G':
+    case 'g':
+      advertenciaLimiteSerial();
+      enviarEventoIoT("NEAR_LIMIT", "CERCA DEL LIMITE POR SERIAL");
+      break;
+
     case 'B':
     case 'b':
       activarBloqueo("Serial local");
